@@ -22,7 +22,7 @@ export default function ShadersBackground() {
           shiftBlue={0.1}
           distortion={0.15}
           contour={1.2}
-          shape="plane"
+          shape="none"
           offsetX={0}
           offsetY={0}
           scale={1.5}
