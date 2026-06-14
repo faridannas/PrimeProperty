@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ==========================================
+// User Schema (Admin & Superadmin)
+// ==========================================
+
+model User {
+  id         String     @id @default(uuid())
+  email      String     @unique
+  password   String
+  role       String     @default("ADMIN") // "ADMIN" atau "SUPERADMIN"
+  isActive   Boolean    @default(true) 
+  
+  // Keamanan: Untuk tracking lockout
+  failedLoginAttempts Int @default(0)
+  lockedUntil         DateTime?
+
+  properties Property[]
+  
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+// ==========================================
+// Property Schema
+// ==========================================
+
+model Property {
+  id            String   @id @default(uuid())
+  nama_property String
+  group         String?
+  lebar         Float
+  panjang       Float
+  
+  // Karena SQLite tidak mendukung Array/Enum murni, kita simpan sebagai String.
+  // Contoh: "Utara,Timur"
+  hadap         String
+  tipe          String   // "Ruko" | "Villa"
+  tingkat       Float
+  price         BigInt   // Disimpan sebagai integer (BigInt) penuh, TIDAK BOLEH float untuk hindari error pembulatan
+  carport       Boolean
+  status        String   // "in_stock" | "sold_out"
+  siap          String   // "siap_huni" | "siap_kosong" | "siap_huni_renovasi"
+  maps_link     String?
+  
+  // Disimpan sebagai string "Krakatau,Pancing"
+  kawasan       String
+  unit          String?
+  
+  created_by    String
+  user          User     @relation(fields: [created_by], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime? // Soft delete
+  
+  images        PropertyImage[]
+}
+
+// ==========================================
+// Property Image Schema
+// ==========================================
+
+model PropertyImage {
+  id         String   @id @default(uuid())
+  url        String   // Lokasi file gambar (misal: /uploads/abc.png)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
