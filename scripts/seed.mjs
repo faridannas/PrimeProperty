@@ -4,17 +4,84 @@ import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
+import 'dotenv/config';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dbPath = path.resolve(__dirname, '../dev.db');
-const dbUrl = `file:///${dbPath.replace(/\\/g, '/')}`;
 
-console.log('📦 Connecting to database:', dbUrl);
+let dbConfig;
+if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+  console.log('☁️ Menggunakan Database Cloud (Turso)...');
+  dbConfig = {
+    url: process.env.TURSO_DATABASE_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN
+  };
+} else {
+  const dbPath = path.resolve(__dirname, '../dev.db');
+  const dbUrl = `file:///${dbPath.replace(/\\/g, '/')}`;
+  console.log('📦 Menggunakan Database Lokal:', dbUrl);
+  dbConfig = { url: dbUrl };
+}
 
-const db = createClient({ url: dbUrl });
+const db = createClient(dbConfig);
 
 async function main() {
-  console.log('🌱 Memulai proses seeding database...');
+  console.log('🌱 Memulai proses inisialisasi & seeding database...');
+
+  // 1. BUAT TABEL OTOMATIS (Bypass Prisma Push)
+  console.log('🛠️ Menciptakan struktur tabel (jika belum ada)...');
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS "User" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "email" TEXT NOT NULL,
+      "password" TEXT NOT NULL,
+      "role" TEXT NOT NULL DEFAULT 'ADMIN',
+      "isActive" BOOLEAN NOT NULL DEFAULT 1,
+      "failedLoginAttempts" INTEGER NOT NULL DEFAULT 0,
+      "lockedUntil" DATETIME,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL
+    );
+  `);
+  
+  await db.execute(`CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");`);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS "Property" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "nama_property" TEXT NOT NULL,
+      "group" TEXT,
+      "lebar" REAL NOT NULL,
+      "panjang" REAL NOT NULL,
+      "hadap" TEXT NOT NULL,
+      "tipe" TEXT NOT NULL,
+      "tingkat" REAL NOT NULL,
+      "price" INTEGER NOT NULL,
+      "carport" BOOLEAN NOT NULL,
+      "status" TEXT NOT NULL,
+      "siap" TEXT NOT NULL,
+      "maps_link" TEXT,
+      "kawasan" TEXT NOT NULL,
+      "unit" TEXT,
+      "created_by" TEXT NOT NULL,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL,
+      "deletedAt" DATETIME,
+      CONSTRAINT "Property_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+    );
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS "PropertyImage" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "url" TEXT NOT NULL,
+      "propertyId" TEXT NOT NULL,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "PropertyImage_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    );
+  `);
+
+  console.log('✅ Struktur tabel berhasil disiapkan!');
 
   // Cek apakah superadmin sudah ada
   const existingSuperAdmin = await db.execute({
